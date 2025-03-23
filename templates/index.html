@@ -1,0 +1,111 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>SQL Genie</title>
+    <link rel="stylesheet" href="/static/style.css">
+</head>
+<body>
+    <h2>Enter Mistral API Key:</h2>
+    <input type="password" id="apiKey" placeholder="Enter Mistral API Key">
+    <button onclick="setAPIKey()">Save API Key</button>
+
+    <h2>Upload Database:</h2>
+    <input type="file" id="dbUpload">
+    <button onclick="uploadDatabase()">Upload</button>
+
+    <h2>Available Tables:</h2>
+    <button onclick="fetchTables()">Refresh Tables</button>
+    <ul id="tableList"></ul>
+
+    <h2>Natural Language to SQL Query</h2>
+    <input type="text" id="userQuery" placeholder="Enter your question...">
+    <button onclick="generateSQL()">Generate SQL</button>
+    <pre id="sqlOutput"></pre>
+
+    <button onclick="executeSQL()">Execute SQL</button>
+    <table id="resultTable"></table>
+
+    <script>
+        async function setAPIKey() {
+            const apiKey = document.getElementById("apiKey").value;
+            await fetch("/set_api_key", {
+                method: "POST",
+                body: new URLSearchParams({ api_key: apiKey })
+            });
+            alert("API Key saved!");
+        }
+
+        async function uploadDatabase() {
+            const file = document.getElementById("dbUpload").files[0];
+            if (!file) {
+                alert("Please select a database file to upload.");
+                return;
+            }
+
+            const formData = new FormData();
+            formData.append("file", file);
+
+            const response = await fetch("/upload_db", { method: "POST", body: formData });
+            const data = await response.json();
+
+            await fetch("/upload_db", { method: "POST", body: formData });
+            alert("Database uploaded!");
+            fetchTables(); 
+        }
+
+        async function fetchTables() {
+            const response = await fetch("/get_tables");
+            const data = await response.json();
+
+            if (data.tables) {
+                let tableList = document.getElementById("tableList");
+                tableList.innerHTML = "";  // Clear previous list
+
+                data.tables.forEach(table => {
+                    let li = document.createElement("li");
+                    li.textContent = table;
+                    tableList.appendChild(li);
+                });
+            } else {
+                alert("No tables found or database not uploaded.");
+            }
+        }
+        
+        async function generateSQL() {
+            const userQuery = document.getElementById("userQuery").value;
+            const response = await fetch("/generate_sql?user_query=" + encodeURIComponent(userQuery), { method: "POST" });
+            const data = await response.json();
+            document.getElementById("sqlOutput").textContent = data.sql_query || data.error;
+        }
+
+        async function executeSQL() {
+            const sqlQuery = document.getElementById("sqlOutput").textContent;
+            if (!sqlQuery) {
+                alert("No SQL query found!");
+                return;
+            }
+
+            const response = await fetch("/execute_sql", {
+                method: "POST",
+                headers: { "Content-Type": "application/json" },
+                body: JSON.stringify({ sql_query: sqlQuery })
+            });
+
+            const data = await response.json();
+
+            if (data.error) {
+                alert(data.error);
+                return;
+            }
+
+            let table = document.getElementById("resultTable");
+            table.innerHTML = "<tr>" + data.columns.map(col => `<th>${col}</th>`).join("") + "</tr>";
+            data.data.forEach(row => {
+                table.innerHTML += "<tr>" + row.map(val => `<td>${val}</td>`).join("") + "</tr>";
+            });
+        }
+    </script>
+</body>
+</html>

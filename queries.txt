@@ -1,0 +1,10 @@
+1. Retrieve all the employee names along with their departments.
+2. Find the names of employees who earn more than $70,000, along with their salary.
+3. Get the names of all employees who joined after 2020.
+4. Retrieve the names of employees and their managers. 
+5. Find all the employees working on the "IT Upgrade" department. // results blank
+6. List all projects along with the total hours worked on each projects.
+7. Calculate the total salary expenditure for each department, display department name.
+8. Find the average number of hours worked by employees on each project.
+9. Retrieve the department with the highest total salary expenditure.
+10. Find employees who earn more than the average salary in their department.
