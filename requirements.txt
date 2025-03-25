@@ -1,6 +1,0 @@
-fastapi 
-uvicorn 
-sqlite3 
-mistralai 
-sqlalchemy 
-pandas
