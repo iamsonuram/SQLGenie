@@ -5,6 +5,7 @@
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
     <title>SQL Genie</title>
     <link rel="stylesheet" href="/static/style.css">
+    <script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
 </head>
 <body>
     <h2>Enter Mistral API Key:</h2>
@@ -26,6 +27,12 @@
 
     <button onclick="executeSQL()">Execute SQL</button>
     <table id="resultTable"></table>
+
+    <h2>Visualization</h2>
+    <div id="chartContainer">
+        <canvas id="chartCanvas"></canvas>
+    </div>
+
 
     <script>
         async function setAPIKey() {
@@ -100,12 +107,58 @@
                 return;
             }
 
+            // Display results in table
             let table = document.getElementById("resultTable");
             table.innerHTML = "<tr>" + data.columns.map(col => `<th>${col}</th>`).join("") + "</tr>";
             data.data.forEach(row => {
                 table.innerHTML += "<tr>" + row.map(val => `<td>${val}</td>`).join("") + "</tr>";
             });
+            // Auto-detect best chart type
+            generateChart(data);
+            print("Function called!")
         }
+
+        function generateChart(data) {
+        if (!data || !data.columns || !data.data || !data.column_types) return;
+
+        const columnTypes = data.column_types;
+        const firstColumn = data.columns[0];  // X-axis
+        const secondColumn = data.columns[1]; // Y-axis (if numeric)
+        print(firstColumn, secondColumn)
+
+        let chartType = "bar"; // Default chart type
+        let labels = data.data.map(row => row[0]);  // X-axis labels
+        let values = data.data.map(row => row[1]);  // Y-axis values
+
+        if (columnTypes[firstColumn] === "categorical" && columnTypes[secondColumn] === "numeric") {
+            chartType = "bar";  // Best for category → number
+        } else if (columnTypes[firstColumn] === "numeric" && columnTypes[secondColumn] === "numeric") {
+            chartType = "scatter";  // Numeric vs Numeric
+        } else if (columnTypes[firstColumn] === "datetime" && columnTypes[secondColumn] === "numeric") {
+            chartType = "line";  // Time series data
+        } else if (columnTypes[secondColumn] === "categorical") {
+            chartType = "pie";  // Categorical data
+            labels = data.data.map(row => row[1]);  // X-axis labels from 2nd column
+            values = data.data.map(row => row[0]);  // Y-axis values from 1st column
+        }
+
+        // Remove old chart
+        const chartContainer = document.getElementById("chartContainer");
+        chartContainer.innerHTML = '<canvas id="chartCanvas"></canvas>';
+
+        const ctx = document.getElementById("chartCanvas").getContext("2d");
+        new Chart(ctx, {
+            type: chartType,
+            data: {
+                labels: labels,
+                datasets: [{
+                    label: secondColumn,
+                    data: values,
+                    backgroundColor: "rgba(54, 162, 235, 0.5)"
+                }]
+            }
+        });
+    }
     </script>
 </body>
 </html>

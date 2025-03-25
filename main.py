@@ -7,7 +7,6 @@ from fastapi.staticfiles import StaticFiles
 from fastapi.responses import FileResponse
 import os
 
-
 app = FastAPI()
 
 # Serve static files (CSS, JS)
@@ -20,10 +19,12 @@ MISTRAL_API_KEY = None
 class SQLRequest(BaseModel):
     sql_query: str  # Expecting JSON with a key `sql_query`
 
+
 @app.get("/")
 def read_root():
     """Serve the main frontend page."""
     return FileResponse(os.path.join("templates", "index.html"))
+
 
 @app.post("/set_api_key")
 def set_api_key(api_key: str = Form(...)):
@@ -31,6 +32,7 @@ def set_api_key(api_key: str = Form(...)):
     global MISTRAL_API_KEY
     MISTRAL_API_KEY = api_key
     return {"message": "API Key set successfully!"}
+
 
 @app.post("/upload_db")
 def upload_database(file: UploadFile = File(...)):
@@ -61,8 +63,27 @@ def get_tables():
     return {"tables": tables}
 
 
+def is_valid_for_visualization(df):
+    """
+    Checks if the SQL query result is suitable for visualization.
+    """
+    if df.empty:
+        return False  # No data to plot
+
+    num_cols = df.select_dtypes(include=['number']).columns
+    cat_cols = df.select_dtypes(include=['object']).columns
+
+    # Conditions for plotting
+    if len(num_cols) == 0:  
+        return False  # No numeric data, so skip visualization
+    if len(cat_cols) == 0 and 'date' not in df.columns:
+        return False  # No categorical or time-series data, so skip visualization
+
+    return True  # Valid for visualization
+
+
 def execute_sql(sql_query):
-    """Executes the given SQL query and returns results."""
+    """Executes the given SQL query, detects data types, and returns structured results."""
     if not sql_query or not DB_PATH:
         return {"error": "No valid SQL query or database selected."}
 
@@ -70,14 +91,55 @@ def execute_sql(sql_query):
     cursor = conn.cursor()
 
     try:
-        cursor.execute(sql_query)
-        results = cursor.fetchall()
-        columns = [desc[0] for desc in cursor.description]  # Get column names
+        df = pd.read_sql_query(sql_query, conn)
         conn.close()
-        return {"columns": columns, "data": results}
+
+        # Detect column types
+        column_types = {}
+        for col in df.columns:
+            if pd.api.types.is_numeric_dtype(df[col]):
+                column_types[col] = "numeric"
+            elif pd.api.types.is_datetime64_any_dtype(df[col]):
+                column_types[col] = "datetime"
+            else:
+                column_types[col] = "categorical"
+
+        result = {
+            "columns": df.columns.tolist(),
+            "data": df.values.tolist(),
+            "column_types": column_types  # Send data types to frontend
+        }
+
+        # Check if the data is suitable for visualization
+        if is_valid_for_visualization(df):
+            result["chart_data"] = generate_chart_data(df)  # Convert data for Chart.js
+
+        return result
     except Exception as e:
         conn.close()
         return {"error": str(e)}
+
+
+def generate_chart_data(df):
+    """
+    Converts DataFrame into Chart.js compatible format.
+    """
+    chart_data = {
+        "labels": df[df.columns[0]].tolist(),  # Use first column as labels (categories)
+        "datasets": []
+    }
+
+    for col in df.columns[1:]:  # Skip first column (assuming categorical)
+        if pd.api.types.is_numeric_dtype(df[col]):
+            dataset = {
+                "label": col,
+                "data": df[col].tolist(),
+                "backgroundColor": "rgba(54, 162, 235, 0.5)"
+            }
+            chart_data["datasets"].append(dataset)
+
+    return chart_data
+
 
 @app.post("/generate_sql")
 def generate_sql_endpoint(user_query: str):
