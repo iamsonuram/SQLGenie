@@ -4,161 +4,373 @@
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
     <title>SQL Genie</title>
-    <link rel="stylesheet" href="/static/style.css">
+    <!-- Bootstrap CSS -->
+    <link href="https://cdn.jsdelivr.net/npm/bootstrap@5.3.0/dist/css/bootstrap.min.css" rel="stylesheet">
+    
+    <!-- Chart.js for Visualization -->
     <script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
+
+    <!-- Custom CSS -->
+    <style>
+        body {
+            background-color: #ffeae0;
+        }
+        .container {
+            margin-top: 20px;
+        }
+        .hidden {
+            display: none;
+        }
+        .navbar {
+            background-color: #e8b867;
+        }
+        .navbar-brand {
+            color: #ffeae0 !important;
+        }
+        table {
+            background-color: white;
+        }
+        thead {
+            background-color: #007bff;
+            color: white;
+        }
+        .card {
+            box-shadow: 0px 4px 6px rgba(0, 0, 0, 0.1);
+        }
+        .query-result-table {
+            background-color: white;
+        }
+        tbody tr:hover {
+            background-color: #f1f1f1;
+        }
+        #visualizationCanvas {
+            width: 100%;
+            max-height: 400px;
+        }
+    </style>
+
 </head>
 <body>
-    <h2>Enter Mistral API Key:</h2>
-    <input type="password" id="apiKey" placeholder="Enter Mistral API Key">
-    <button onclick="setAPIKey()">Save API Key</button>
+    <!-- Navbar -->
+    <nav class="navbar navbar-expand-lg navbar-dark">
+        <div class="container">
+            <a class="navbar-brand" href="#">SQL Genie</a>
+            <button class="btn btn-outline-light" id="toggleSettings">Settings</button>
+        </div>
+    </nav>
 
-    <h2>Upload Database:</h2>
-    <input type="file" id="dbUpload">
-    <button onclick="uploadDatabase()">Upload</button>
+    <!-- Settings Containers (Hidden by Default) -->
+    <div class="container hidden" id="settingsContainer">
+        <div class="row">
+            <!-- API Key Entry -->
+            <div class="col-md-6">
+                <div class="card shadow p-3">
+                    <h5 class="card-title">Enter Mistral API Key</h5>
+                    <input type="password" id="apiKey" class="form-control mt-2" placeholder="Enter Mistral API Key">
+                    <button class="btn btn-primary mt-2" onclick="setApiKey()">Save API Key</button>
+                </div>
+            </div>
 
-    <h2>Available Tables:</h2>
-    <button onclick="fetchTables()">Refresh Tables</button>
-    <ul id="tableList"></ul>
+            <!-- Upload Database -->
+            <div class="col-md-6">
+                <div class="card shadow p-3">
+                    <h5 class="card-title">Upload Database</h5>
+                    <input type="file" id="dbUpload" class="form-control mt-2">
+                    <button class="btn btn-success mt-2" onclick="uploadDatabase()">Upload</button>
+                </div>
+            </div>
+        </div>
+    </div>
 
-    <h2>Natural Language to SQL Query</h2>
-    <input type="text" id="userQuery" placeholder="Enter your question...">
-    <button onclick="generateSQL()">Generate SQL</button>
-    <pre id="sqlOutput"></pre>
+    <!-- Available Tables Section -->
+    <div class="container mt-4">
+        <h3 class="text-center">Available Tables</h3>
+        <button class="btn btn-primary mb-3" onclick="fetchTables()">Refresh Tables</button>
+        <div id="tablesContainer">
+            <table class="table table-bordered table-hover text-center">
+                <thead>
+                    <tr>
+                        <th>No.</th>
+                        <th>Table Name</th>
+                    </tr>
+                </thead>
+                <tbody id="tablesList">
+                    <tr>
+                        <td colspan="2">No tables available. Click "Refresh Tables".</td>
+                    </tr>
+                </tbody>
+            </table>
+        </div>
+    </div>
 
-    <button onclick="executeSQL()">Execute SQL</button>
-    <table id="resultTable"></table>
+    <!-- Natural Language to SQL Query -->
+    <div class="container mt-4">
+        <h3 class="text-center">Natural Language to SQL Query</h3>
+        <div class="card shadow p-3">
+            <textarea id="userQuery" class="form-control" rows="3" placeholder="Enter your natural language query..."></textarea>
+            <button class="btn btn-primary mt-2" onclick="generateSQL()">Generate SQL</button>
+            <button class="btn btn-success mt-2" onclick="executeQuery()">Execute Query</button>
+        </div>
+    
+        <!-- Generated SQL Query Display -->
+        <div class="mt-3">
+            <h5>Generated SQL Query:</h5>
+            <p id="generatedSQL" class="text-muted">No query generated yet.</p>
+        </div>
+    
+        <!-- Query Results -->
+        <div class="mt-4">
+            <h5>Query Results:</h5>
+            <table class="table table-bordered query-result-table text-center">
+                <thead id="queryTableHead">
+                    <!-- Table Headers Go Here -->
+                </thead>
+                <tbody id="queryTableBody">
+                    <!-- Query Results Go Here -->
+                </tbody>
+            </table>
+        </div>
 
-    <h2>Visualization</h2>
-    <div id="chartContainer">
-        <canvas id="chartCanvas"></canvas>
+        <!-- Generate Visualization -->
+        <div id="chartContainer">
+            <button class="btn btn-info mt-2" onclick="generateVisualization()">Generate Visualization</button>
+            <canvas id="visualizationCanvas" class="mt-3 hidden"></canvas>
+        </div>
     </div>
 
 
     <script>
-        async function setAPIKey() {
-            const apiKey = document.getElementById("apiKey").value;
-            await fetch("/set_api_key", {
+        document.getElementById("toggleSettings").addEventListener("click", function() {
+            let settingsContainer = document.getElementById("settingsContainer");
+            settingsContainer.classList.toggle("hidden");
+        });
+
+        function setApiKey() {
+            let apiKey = document.getElementById("apiKey").value;
+            if (!apiKey) {
+                alert("Please enter an API Key!");
+                return;
+            }
+
+            fetch("/set_api_key", {
                 method: "POST",
-                body: new URLSearchParams({ api_key: apiKey })
-            });
-            alert("API Key saved!");
+                body: new URLSearchParams({ api_key: apiKey }),
+                headers: { "Content-Type": "application/x-www-form-urlencoded" }
+            })
+            .then(response => response.json())
+            .then(data => alert(data.message))
+            .catch(error => console.error("Error:", error));
         }
 
-        async function uploadDatabase() {
-            const file = document.getElementById("dbUpload").files[0];
-            if (!file) {
-                alert("Please select a database file to upload.");
+        function uploadDatabase() {
+            let fileInput = document.getElementById("dbUpload");
+            if (!fileInput.files.length) {
+                alert("Please select a database file!");
                 return;
             }
 
-            const formData = new FormData();
-            formData.append("file", file);
+            let formData = new FormData();
+            formData.append("file", fileInput.files[0]);
 
-            const response = await fetch("/upload_db", { method: "POST", body: formData });
-            const data = await response.json();
-
-            await fetch("/upload_db", { method: "POST", body: formData });
-            alert("Database uploaded!");
-            fetchTables(); 
+            fetch("/upload_db", {
+                method: "POST",
+                body: formData
+            })
+            .then(response => response.json())
+            .then(data => alert(data.message))
+            .catch(error => console.error("Error:", error));
         }
 
-        async function fetchTables() {
-            const response = await fetch("/get_tables");
-            const data = await response.json();
+        function fetchTables() {
+            fetch("/get_tables")
+            .then(response => response.json())
+            .then(data => {
+                let tablesList = document.getElementById("tablesList");
+                tablesList.innerHTML = "";
 
-            if (data.tables) {
-                let tableList = document.getElementById("tableList");
-                tableList.innerHTML = "";  // Clear previous list
+                if (data.tables.length === 0) {
+                    tablesList.innerHTML = "<tr><td colspan='2'>No tables found in the database.</td></tr>";
+                    return;
+                }
 
-                data.tables.forEach(table => {
-                    let li = document.createElement("li");
-                    li.textContent = table;
-                    tableList.appendChild(li);
+                data.tables.forEach((table, index) => {
+                    let row = `<tr>
+                        <td>${index + 1}</td>
+                        <td>${table}</td>
+                    </tr>`;
+                    tablesList.innerHTML += row;
                 });
-            } else {
-                alert("No tables found or database not uploaded.");
-            }
-        }
-        
-        async function generateSQL() {
-            const userQuery = document.getElementById("userQuery").value;
-            const response = await fetch("/generate_sql?user_query=" + encodeURIComponent(userQuery), { method: "POST" });
-            const data = await response.json();
-            document.getElementById("sqlOutput").textContent = data.sql_query || data.error;
+            })
+            .catch(error => console.error("Error fetching tables:", error));
         }
 
-        async function executeSQL() {
-            const sqlQuery = document.getElementById("sqlOutput").textContent;
-            if (!sqlQuery) {
-                alert("No SQL query found!");
+        function generateSQL() {
+            let userQuery = document.getElementById("userQuery").value;
+            if (!userQuery) {
+                alert("Please enter a natural language query.");
                 return;
             }
 
-            const response = await fetch("/execute_sql", {
+            fetch("/generate_sql", {
+                method: "POST",
+                headers: { "Content-Type": "application/json" },
+                body: JSON.stringify({ user_query: userQuery }) // Correct JSON structure
+            })
+            .then(response => response.json())
+            .then(data => {
+                
+                if (data.sql_query) {
+                    document.getElementById("generatedSQL").innerText = data.sql_query;
+                } else {
+                    document.getElementById("generatedSQL").innerText = "No query generated.";
+                }
+            })
+            .catch(error => console.error("Error:", error));
+        }
+
+        function executeQuery() {
+            let sqlQuery = document.getElementById("generatedSQL").innerText;
+            if (!sqlQuery || sqlQuery === "No query generated.") {
+                alert("Generate SQL query first!");
+                return;
+            }
+
+            fetch("/execute_sql", {
                 method: "POST",
                 headers: { "Content-Type": "application/json" },
                 body: JSON.stringify({ sql_query: sqlQuery })
-            });
+            })
+            .then(response => response.json())
+            .then(data => {
 
-            const data = await response.json();
+                let tableHead = document.getElementById("queryTableHead");
+                let tableBody = document.getElementById("queryTableBody");
 
-            if (data.error) {
-                alert(data.error);
+                tableHead.innerHTML = "";
+                tableBody.innerHTML = "";
+
+                if (data.error) {
+                    alert(data.error);
+                    return;
+                }
+
+                if (!data.data || data.data.length === 0) {
+                    tableBody.innerHTML = "<tr><td colspan='100%'>No results found.</td></tr>";
+                    return;
+                }
+
+                // Generate table headers dynamically
+                let headers = data.columns;
+                let headerRow = "<tr>" + headers.map(col => `<th>${col}</th>`).join("") + "</tr>";
+                tableHead.innerHTML = headerRow;
+
+                data.data.forEach(row => {
+                    let rowHTML = "<tr>" + headers.map(col => `<td>${row[col]}</td>`).join("") + "</tr>";
+                    tableBody.innerHTML += rowHTML;
+                });
+            })
+            .catch(error => console.error("Error:", error));
+        }
+        
+
+        function generateVisualization() {
+            // Get data from the table
+            let table = document.querySelector(".query-result-table");
+            let rows = table.getElementsByTagName("tr");
+
+            if (rows.length < 2) {
+                alert("No data available for visualization.");
                 return;
             }
 
-            // Display results in table
-            let table = document.getElementById("resultTable");
-            table.innerHTML = "<tr>" + data.columns.map(col => `<th>${col}</th>`).join("") + "</tr>";
-            data.data.forEach(row => {
-                table.innerHTML += "<tr>" + row.map(val => `<td>${val}</td>`).join("") + "</tr>";
-            });
-            // Auto-detect best chart type
-            generateChart(data);
-            print("Function called!")
-        }
+            let columns = [];
+            let columnTypes = {};
+            let data = [];
 
-        function generateChart(data) {
-        if (!data || !data.columns || !data.data || !data.column_types) return;
-
-        const columnTypes = data.column_types;
-        const firstColumn = data.columns[0];  // X-axis
-        const secondColumn = data.columns[1]; // Y-axis (if numeric)
-        print(firstColumn, secondColumn)
-
-        let chartType = "bar"; // Default chart type
-        let labels = data.data.map(row => row[0]);  // X-axis labels
-        let values = data.data.map(row => row[1]);  // Y-axis values
-
-        if (columnTypes[firstColumn] === "categorical" && columnTypes[secondColumn] === "numeric") {
-            chartType = "bar";  // Best for category → number
-        } else if (columnTypes[firstColumn] === "numeric" && columnTypes[secondColumn] === "numeric") {
-            chartType = "scatter";  // Numeric vs Numeric
-        } else if (columnTypes[firstColumn] === "datetime" && columnTypes[secondColumn] === "numeric") {
-            chartType = "line";  // Time series data
-        } else if (columnTypes[secondColumn] === "categorical") {
-            chartType = "pie";  // Categorical data
-            labels = data.data.map(row => row[1]);  // X-axis labels from 2nd column
-            values = data.data.map(row => row[0]);  // Y-axis values from 1st column
-        }
-
-        // Remove old chart
-        const chartContainer = document.getElementById("chartContainer");
-        chartContainer.innerHTML = '<canvas id="chartCanvas"></canvas>';
-
-        const ctx = document.getElementById("chartCanvas").getContext("2d");
-        new Chart(ctx, {
-            type: chartType,
-            data: {
-                labels: labels,
-                datasets: [{
-                    label: secondColumn,
-                    data: values,
-                    backgroundColor: "rgba(54, 162, 235, 0.5)"
-                }]
+            // Extract column names from table header
+            let headers = rows[0].getElementsByTagName("th");
+            for (let i = 0; i < headers.length; i++) {
+                columns.push(headers[i].innerText);
             }
-        });
-    }
+
+            // Extract row data
+            for (let i = 1; i < rows.length; i++) {
+                let row = rows[i].getElementsByTagName("td");
+                let rowData = [];
+
+                for (let j = 0; j < row.length; j++) {
+                    let cellValue = row[j].innerText.trim();
+                    
+                    // Determine data type (numeric, datetime, categorical)
+                    if (!isNaN(cellValue) && cellValue !== "") {
+                        cellValue = parseFloat(cellValue);
+                        columnTypes[columns[j]] = "numeric";
+                    } else if (Date.parse(cellValue)) {
+                        columnTypes[columns[j]] = "datetime";
+                    } else {
+                        columnTypes[columns[j]] = "categorical";
+                    }
+
+                    rowData.push(cellValue);
+                }
+                data.push(rowData);
+            }
+
+            if (columns.length < 2) {
+                alert("At least two columns are required for visualization.");
+                return;
+            }
+
+            let firstColumn = columns[0]; // X-axis
+            let secondColumn = columns[1]; // Y-axis (if numeric)
+            let chartType = "bar"; // Default chart type
+            let labels = data.map(row => row[0]); // X-axis labels
+            let values = data.map(row => row[1]); // Y-axis values
+
+            if (columnTypes[firstColumn] === "categorical" && columnTypes[secondColumn] === "numeric") {
+                chartType = "bar";  // Best for category → number
+            } else if (columnTypes[firstColumn] === "numeric" && columnTypes[secondColumn] === "numeric") {
+                chartType = "scatter";  // Numeric vs Numeric
+            } else if (columnTypes[firstColumn] === "datetime" && columnTypes[secondColumn] === "numeric") {
+                chartType = "line";  // Time series data
+            } else if (columnTypes[secondColumn] === "categorical") {
+                chartType = "pie";  // Categorical data
+                labels = data.map(row => row[1]); // X-axis labels from 2nd column
+                values = data.map(row => row[0]); // Y-axis values from 1st column
+            }
+
+            // Ensure the existing chart container remains intact
+            let canvas = document.getElementById("visualizationCanvas");
+            if (canvas) {
+                canvas.remove(); // Remove the existing canvas before adding a new one
+            }
+
+            // Create a new canvas inside the existing visualization container
+            let chartContainer = document.getElementById("chartContainer");
+            let newCanvas = document.createElement("canvas");
+            newCanvas.id = "visualizationCanvas";
+            chartContainer.appendChild(newCanvas);
+
+            let ctx = newCanvas.getContext("2d");
+            new Chart(ctx, {
+                type: chartType,
+                data: {
+                    labels: labels,
+                    datasets: [{
+                        label: secondColumn,
+                        data: values,
+                        backgroundColor: "rgba(54, 162, 235, 0.5)"
+                    }]
+                }
+            });
+
+            document.getElementById("visualizationCanvas").classList.remove("hidden");
+        }
+
     </script>
+
+    <!-- Bootstrap JS -->
+    <script src="https://cdn.jsdelivr.net/npm/bootstrap@5.3.0/dist/js/bootstrap.bundle.min.js"></script>
+
 </body>
 </html>
