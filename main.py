@@ -19,6 +19,9 @@ MISTRAL_API_KEY = None
 class SQLRequest(BaseModel):
     sql_query: str  # Expecting JSON with a key `sql_query`
 
+class QueryRequest(BaseModel):
+    user_query: str
+
 
 @app.get("/")
 def read_root():
@@ -82,6 +85,12 @@ def is_valid_for_visualization(df):
     return True  # Valid for visualization
 
 
+@app.post("/execute_sql")
+def execute_sql_endpoint(request: SQLRequest):
+    """Executes an SQL query and returns the results."""
+    return execute_sql(request.sql_query)
+
+
 def execute_sql(sql_query):
     """Executes the given SQL query, detects data types, and returns structured results."""
     if not sql_query or not DB_PATH:
@@ -91,69 +100,86 @@ def execute_sql(sql_query):
     cursor = conn.cursor()
 
     try:
-        df = pd.read_sql_query(sql_query, conn)
-        conn.close()
+        cursor.execute(sql_query)
+        result = cursor.fetchall()
+        column_names = [desc[0] for desc in cursor.description]
 
-        # Detect column types
-        column_types = {}
-        for col in df.columns:
-            if pd.api.types.is_numeric_dtype(df[col]):
-                column_types[col] = "numeric"
-            elif pd.api.types.is_datetime64_any_dtype(df[col]):
-                column_types[col] = "datetime"
-            else:
-                column_types[col] = "categorical"
+        if not result:
+            return {"message": "Query executed successfully, but no results found.", "data": []}
 
-        result = {
-            "columns": df.columns.tolist(),
-            "data": df.values.tolist(),
-            "column_types": column_types  # Send data types to frontend
-        }
+        result_list = [dict(zip(column_names, row)) for row in result]
+        df = pd.DataFrame(result_list)
+
+        response = {"data": result_list, "columns": column_names}
 
         # Check if the data is suitable for visualization
         if is_valid_for_visualization(df):
-            result["chart_data"] = generate_chart_data(df)  # Convert data for Chart.js
+            response["chart_data"] = generate_chart_data(df)  # Convert data for Chart.js
 
-        return result
+        return response
+
+    except sqlite3.Error as e:
+        return {"error": f"SQL Error: {str(e)}"}
     except Exception as e:
+        return {"error": f"Unexpected Error: {str(e)}"}
+    finally:
         conn.close()
-        return {"error": str(e)}
 
 
 def generate_chart_data(df):
     """
-    Converts DataFrame into Chart.js compatible format.
+    Converts DataFrame into Chart.js compatible format dynamically.
     """
-    chart_data = {
-        "labels": df[df.columns[0]].tolist(),  # Use first column as labels (categories)
-        "datasets": []
-    }
+    column_types = {}
 
-    for col in df.columns[1:]:  # Skip first column (assuming categorical)
+    for col in df.columns:
         if pd.api.types.is_numeric_dtype(df[col]):
-            dataset = {
-                "label": col,
-                "data": df[col].tolist(),
-                "backgroundColor": "rgba(54, 162, 235, 0.5)"
-            }
-            chart_data["datasets"].append(dataset)
+            column_types[col] = "numeric"
+        elif pd.api.types.is_datetime64_any_dtype(df[col]):
+            column_types[col] = "datetime"
+        else:
+            column_types[col] = "categorical"
 
-    return chart_data
+    # Default selection of columns for visualization
+    first_column = df.columns[0]  # X-axis
+    second_column = df.columns[1] if len(df.columns) > 1 else None  # Y-axis
+
+    chart_type = "bar"  # Default chart
+    labels = df[first_column].astype(str).tolist()
+    values = df[second_column].tolist() if second_column else []
+
+    if column_types[first_column] == "categorical" and column_types[second_column] == "numeric":
+        chart_type = "bar"
+    elif column_types[first_column] == "numeric" and column_types[second_column] == "numeric":
+        chart_type = "scatter"
+    elif column_types[first_column] == "datetime" and column_types[second_column] == "numeric":
+        chart_type = "line"
+    elif column_types[second_column] == "categorical":
+        chart_type = "pie"
+        labels = df[second_column].astype(str).tolist()
+        values = df[first_column].tolist()
+
+    return {
+        "chart_type": chart_type,
+        "labels": labels,
+        "datasets": [{
+            "label": second_column if second_column else first_column,
+            "data": values,
+            "backgroundColor": "rgba(54, 162, 235, 0.5)"
+        }],
+        "column_types": column_types
+    }
 
 
 @app.post("/generate_sql")
-def generate_sql_endpoint(user_query: str):
+def generate_sql_endpoint(request: QueryRequest):
     """API endpoint to convert NL query to SQL using user-provided API key."""
     if not MISTRAL_API_KEY:
         return {"error": "Mistral API key not set. Please enter your API key first."}
 
-    sql_query = generate_sql(user_query, MISTRAL_API_KEY, DB_PATH)
+    sql_query = generate_sql(request.user_query, MISTRAL_API_KEY, DB_PATH)
+
     if sql_query:
+        print(f"Generated SQL Query: {sql_query}")  # Debugging
         return {"sql_query": sql_query}
     return {"error": "No relevant table found."}
-
-
-@app.post("/execute_sql")
-def execute_sql_endpoint(request: SQLRequest):
-    """API endpoint to execute SQL queries and return results."""
-    return execute_sql(request.sql_query)
