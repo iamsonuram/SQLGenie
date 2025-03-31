@@ -3,8 +3,8 @@ import json
 import sqlite3
 
 MISTRAL_URL = "https://api.mistral.ai/v1/chat/completions"
-MISTRAL_API_KEY = "jDcCdZ0dkkTKEjAfVIoLWbRcmZ4ktwBs"
-MISTRAL_AGENT_ID = "ag:79ec7e4f:20250328:untitled-agent:36859aa3"
+MISTRAL_API_KEY = ""
+MISTRAL_AGENT_ID = ""
 
 PLOTS_DIR = "static/plots"
 PLOT_SCRIPT = "plot.py"
