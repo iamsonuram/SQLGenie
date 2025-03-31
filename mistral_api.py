@@ -88,7 +88,7 @@ def call_mistral_for_visualization(CSV_OUTPUT):
     2. Do NOT include explanations, comments, or markdown formatting.
     3. Ensure the script is immediately executable and works in a server-side context.
     4. Follow the exact import order: set matplotlib.use('Agg') first, then import other libraries.
-    5. Do not insert backslashes (\) before underscores in variable names or file paths. Use pd.read_csv("generated_data.csv"), not pd.read\_csv("generated\_data.csv").
+    5. Do not insert backslashes (\) before underscores in variable names or file paths. Example: Use pd.read_csv("generated_data.csv"), not pd.read\_csv("generated\_data.csv").
     6. 6. Resolve all the import issues.
         
     CSV Data:
@@ -101,7 +101,7 @@ def call_mistral_for_visualization(CSV_OUTPUT):
     - **Reads a CSV file** named `"generated_data.csv"` using: df = pd.read_csv("generated_data.csv")  # Ensure correct syntax, no backslashes.
     - **Do not include any explanations, comments, or markdown formatting.**  
     - **Ensure the script is immediately executable.**  
-    - **Do not insert backslashes (\) before underscores in variable names or file paths. Use pd.read_csv("generated_data.csv"), not pd.read\_csv("generated\_data.csv").**
+    - **Do not insert backslashes (\) before underscores in variable names or file paths. Example: Use pd.read_csv("generated_data.csv"), not pd.read\_csv("generated\_data.csv").**
     """
 
     headers = {
