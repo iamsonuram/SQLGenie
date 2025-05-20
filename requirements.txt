@@ -1,6 +1,4 @@
 fastapi 
 uvicorn 
-sqlite3 
-mistralai 
-sqlalchemy 
+mistralai
 pandas
